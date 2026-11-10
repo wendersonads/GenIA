@@ -338,24 +338,70 @@ Abaixo, apresentamos um exemplo prático variando a temperatura na geração de 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 model_id = "Qwen/Qwen3-1.7B"
+
+# Carregando tokenizer
 tokenizer = AutoTokenizer.from_pretrained(model_id)
 
+# Identificando dispositivo
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Usando o dispositivo: {device}")
 
+print(f"Usando dispositivo: {device}")
+
+# Carregando modelo
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    torch_dtype="auto",
-    trust_remote_code=True
+    torch_dtype="auto"
 ).to(device)
 
-prompt = "Pelé é o rei do"
-temperaturas = [0.2, 0.7, 1.0, 1.5, 2.5]
+model.eval()
+
+# Prompt
+messages = [
+    {
+        "role": "user",
+        "content": "Explique em português brasileiro por que Pelé é considerado o rei do futebol. Escreva um texto coerente e objetivo."
+    }
+]
+
+# Aplicando template do Qwen3
+text = tokenizer.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True,
+    enable_thinking=False
+)
+
+# Tokenizando entrada
+inputs = tokenizer(
+    [text],
+    return_tensors="pt"
+).to(device)
+
+# Temperaturas
+temperaturas = [0.2, 0.7, 1.0, 1.5]
 
 for temp in temperaturas:
-    print(f"\nTemperatura = {temp}:")
-    result = generator(prompt, max_new_tokens=80, do_sample=True, temperature=temp)
-    print(result[0]['generated_text'])
+    print(f"\nTemperatura: {temp}")
+
+    with torch.inference_mode():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=150,
+            do_sample=True,
+            temperature=temp,
+            top_p=0.8,
+            top_k=20,
+            repetition_penalty=1.1
+        )
+
+    # Recuperando somente os tokens novos
+    generated_ids = outputs[0][inputs.input_ids.shape[1]:]
+
+    resposta = tokenizer.decode(
+        generated_ids,
+        skip_special_tokens=True
+    )
+    print(resposta)
 
 """## Comentário sobre o experimento de temperatura
 
